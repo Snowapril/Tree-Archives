@@ -1,6 +1,18 @@
 #ifndef BST_HPP
 #define BST_HPP
 
+/**
+* @file      bst.hpp
+* @author    snowapril
+* @date      2018-12-24 (ongoing)
+* @brief     custom binary search tree data structure which almost similar to STL.
+* @details   header only Binary Search Tree data structure. provide only downside_iterator.
+             when given downside_iterator, you can get it's left child using decrement operator 
+             and it's right child using increment operator.
+* @see       
+* @reference http://tree.phi-sci.com/
+*/
+
 #include <initializer_list>
 #include <memory>
 
