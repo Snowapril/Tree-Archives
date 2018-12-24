@@ -87,6 +87,7 @@
         "xlocbuf": "cpp",
         "xlocmes": "cpp",
         "queue": "cpp",
-        "stack": "cpp"
+        "stack": "cpp",
+        "allocators": "cpp"
     }
 }
