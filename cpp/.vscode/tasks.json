@@ -8,7 +8,7 @@
             "type": "shell",
             "command": "g++",
             "args": [
-                "-O3", "-march=native", "-fPIC", "main.cpp", "-g"
+                "main.cpp", "-g"//, "-O3", "-march=native", "-fPIC",
             ],
             "group": {
                 "kind": "build",

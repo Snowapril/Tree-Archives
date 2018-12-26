@@ -27,11 +27,13 @@ namespace snowapril {
         bst_node_() = default; // default constructor
         bst_node_(Type const &); // constructor with l-value data
         bst_node_(Type&&); // constructor with r-value data
+        bst_node_(bst_node_<Type>*, Type const &); // constructor with parent pointer and l_value data.
+        bst_node_(bst_node_<Type>*, Type&&); // constructor with parent pointer and r_value data.
         bst_node_(bst_node_<Type>&&); // move constructor
         bst_node_<Type> & operator=(bst_node_<Type>&&); // move assignment operator
         bst_node_(bst_node_<Type> const &); // copy constructor 
         bst_node_<Type> & operator=(bst_node_<Type> const &); // copy assignment operator
-
+        ~bst_node_(); //destructor
         bool operator==(bst_node_ const &) const;
         bool operator!=(bst_node_ const &) const;
     public:
@@ -68,6 +70,7 @@ namespace snowapril {
         ~binary_search_tree(); // destructor
 
             class iterator_base {
+                friend class binary_search_tree<Type, node_allocator>;
             protected:
                 using node_type = bst_node_<Type>;
             public:
@@ -79,9 +82,12 @@ namespace snowapril {
             public:
                 iterator_base() = default;
                 iterator_base(node_type*);
-
+                //return reference of value.
                 Type&   operator*()     const;
+                //return pointerr of value.
                 Type*   operator->()    const;
+                //for testing ( node == nullptr ) at the out of this scope.
+                explicit operator bool() const;
             protected:
                 node_type *node = nullptr;
             };
@@ -93,26 +99,46 @@ namespace snowapril {
             public:
                 bool                operator==(downside_iterator const &) const;
                 bool                operator!=(downside_iterator const &) const;
+                //return downside_iterator which located at (given value) times right step from this iterator.
+                const downside_iterator operator+(unsigned int);
+                //return downside_iterator which located at (given value) times left  step from this iterator.
+                const downside_iterator operator-(unsigned int);
+                //return downside_iterator of right node.
                 downside_iterator&  operator++();
+                //return downside_iterator of left  node.
                 downside_iterator&  operator--();
                 downside_iterator&  operator+=(unsigned int);
                 downside_iterator&  operator-=(unsigned int);
+                explicit operator bool() const;
             };
         public:
+            //return whether if tree is empty.
             bool                empty() const;
+            //return whether if given iterator representate root node.
             bool                is_root(downside_iterator const &) const;
+            //return the number of node in this tree.
             size_type           size() const;
+            //return downside_iterator of root node.
             downside_iterator   begin() const;
+            //return the depth of given iterator in this tree.
             size_type           depth(downside_iterator const &) const;
+            //return the height(depth + 1) of given iterator in this tree.
             size_type           height(downside_iterator const &) const;
+            //remove sub-tree where given iterator is root node.
             downside_iterator   erase(downside_iterator);
+            //remove node which is matched with given value in this tree.
             downside_iterator   remove(Type const &);
+            //remove node which is matched with given value in the sub-tree where given iterator is root node.
             downside_iterator   remove(downside_iterator, Type const &);
+            //append node with given value in the tree.
             void append(Type const &);
+            //append node with given value in the sub-tree where given iterator is root node.
             void append(downside_iterator, Type const &);
         private:
-            pointer _internal_remove(pointer, Type const &);
-            pointer _internal_append(pointer, Type const &);
+            //implementation of method which removes node in the tree.
+            void _internal_remove(node_type*, Type const &);
+            //implementation of method which appends node in the tree.
+            void _internal_append(node_type*, Type const &);
         private:
             node_allocator alloc;
             node_type* root     = nullptr;
@@ -124,6 +150,11 @@ namespace snowapril {
 
     template <typename Type>
     bst_node_<Type>::bst_node_(Type&& _r_value) : value(move(_r_value)) { }
+
+    template <typename Type>
+    bst_node_<Type>::bst_node_(bst_node_<Type> *parent, Type const &_l_value) : parent_node(parent), value(_l_value) { }
+    template <typename Type>
+    bst_node_<Type>::bst_node_(bst_node_<Type> *parent, Type &&_r_value) : parent_node(parent), value(move(_r_value)) { }
 
     template <typename Type>
     bst_node_<Type>::bst_node_(bst_node_<Type>&& _r_node) {
@@ -164,6 +195,16 @@ namespace snowapril {
         return *this;
     }
 
+    #include <iostream>
+    using namespace std;
+
+    template <typename Type>
+    bst_node_<Type>::~bst_node_() {
+        cout << "destructor : " << value << endl;
+        if (left_node)  delete left_node;
+        if (right_node) delete right_node;
+    }
+
     template <typename Type>
     bool bst_node_<Type>::operator==(bst_node_ const & _node) const {
         return value == _node.value;
@@ -174,7 +215,7 @@ namespace snowapril {
     }
 
     template <typename Type, class node_allocator>
-    binary_search_tree<Type, node_allocator>::binary_search_tree(iterator_base const & _iter) {
+    binary_search_tree<Type, node_allocator>::binary_search_tree(iterator_base const &_iter) {
         if (root) {
             alloc.destroy(root);
             alloc.deallocate(root, 1);
@@ -301,7 +342,7 @@ namespace snowapril {
     template <typename Type, class node_allocator>
     typename binary_search_tree<Type, node_allocator>::size_type binary_search_tree<Type, node_allocator>::depth(downside_iterator const & _iter) const {    
         size_type   ret_depth    = 0U;
-        pointer     next_pointer = *_iter;
+        node_type*  next_pointer = _iter.node;
 
         while (next_pointer != root) {
             next_pointer = next_pointer->parent_node;
@@ -319,58 +360,92 @@ namespace snowapril {
     
     template <typename Type, class node_allocator>
     typename binary_search_tree<Type, node_allocator>::downside_iterator binary_search_tree<Type, node_allocator>::erase(downside_iterator _iter) {
-        pointer parent_node = _iter->parent_node;
-        if (parent_node->left_node == *_iter)
+        node_type* parent_node = _iter.node->parent_node;
+        if (parent_node->left_node == _iter.node)
             parent_node->left_node = nullptr;
         else
             parent_node->right_node = nullptr;
 
-        std::vector<pointer> will_be_deleted;
-        std::queue<pointer>  q;
-        q.push(*_iter);
-
+        std::queue<node_type*>  q;
+        q.push(_iter.node);
         while (!q.empty()) {
-            pointer p = q.front();
+            node_type* p = q.front();
             q.pop();
-
-            will_be_deleted.push_back(p);
+            --num_node;
             if (p->left_node)  q.push(p->left_node);
             if (p->right_node) q.push(p->right_node);
+            alloc.destroy(p);
+            alloc.deallocate(p, 1);
         }
-        num_node -= will_be_deleted.size();
-
-        for(auto& node : will_be_deleted) alloc.destroy(node);
-        alloc.deallocate(&will_be_deleted[0], will_be_deleted.size());
+        return downside_iterator(parent_node);
     }
     
     template <typename Type, class node_allocator>
     typename binary_search_tree<Type, node_allocator>::downside_iterator binary_search_tree<Type, node_allocator>::remove(Type const &_value) {
-        
+        if (root) {
+            _internal_remove(root, _value);
+        }
     }
     
     template <typename Type, class node_allocator>
     typename binary_search_tree<Type, node_allocator>::downside_iterator binary_search_tree<Type, node_allocator>::remove(downside_iterator _iter, Type const &_value) {
-
+        if (_iter.node) {
+            _internal_remove(_iter.node, _value);
+        }
     }
 
     template <typename Type, class node_allocator>
-    typename binary_search_tree<Type, node_allocator>::pointer binary_search_tree<Type, node_allocator>::_internal_remove(pointer _node, Type const &_value) {
-        
+    void binary_search_tree<Type, node_allocator>::_internal_remove(node_type* _node, Type const &_value) {
+        //dsafdsfsdfdsf //TODO : here implementation
     }
 
     template <typename Type, class node_allocator>
     void binary_search_tree<Type, node_allocator>::append(Type const &_value) {
-        
+        if (root) {
+            _internal_append(root, _value);
+        }
+        else {
+            root = alloc.allocate(1, 0);
+            alloc.construct(root, _value);
+        }
     }
     
     template <typename Type, class node_allocator>
-    typename binary_search_tree<Type, node_allocator>::pointer binary_search_tree<Type, node_allocator>::_internal_append(pointer _node, Type const &_value) {
-        
-    }
-
-    template <typename Type, class node_allocator>
     void binary_search_tree<Type, node_allocator>::append(downside_iterator _iter, Type const &_value) {
+        if (_iter.node) {
+            _internal_append(_iter, _value);
+        }
+        else {
+            _iter.node = alloc.allocate(1,  0);
+            alloc.construct(_iter.node, _value);
+        }
+    }
+    
+    template <typename Type, class node_allocator>
+    void binary_search_tree<Type, node_allocator>::_internal_append(node_type* _node, Type const &_value) {
+        node_type* prev_node;
+        while (_node) {
+            prev_node = _node;
+            if (_node->value > _value) {
+                _node = _node->left_node;
+            }
+            else if (_node->value == _value) {
+                return;
+            }
+            else {
+                _node = _node->right_node;
+            }
+        }
 
+        _node = prev_node;
+        if (_node->value > _value) {
+            _node->left_node = alloc.allocate(1, 0);
+            alloc.construct(_node->left_node, _node, _value);
+        }
+        else {
+            _node->right_node = alloc.allocate(1, 0);
+            alloc.construct(_node->right_node, _node, _value);
+        }
     }
 
     template <typename Type, class node_allocator>
@@ -378,12 +453,17 @@ namespace snowapril {
 
     template <typename Type, class node_allocator>
     Type& binary_search_tree<Type, node_allocator>::iterator_base::operator*() const {
-        return *node;
+        return node->value;
     }
 
     template <typename Type, class node_allocator>
     Type* binary_search_tree<Type, node_allocator>::iterator_base::operator->() const {
-        return node;
+        return &node->value;
+    }
+
+    template <typename Type, class node_allocator>
+    binary_search_tree<Type, node_allocator>::iterator_base::operator bool() const {
+        return node != nullptr;
     }
 
     template <typename Type, class node_allocator>
@@ -401,14 +481,36 @@ namespace snowapril {
 
     template <typename Type, class node_allocator>
     typename binary_search_tree<Type, node_allocator>::downside_iterator&  binary_search_tree<Type, node_allocator>::downside_iterator::operator++() {
-        this->node = (this->node)->right;
+        if (this->node) {
+            this->node = (this->node)->right_node;
+        }
         return *this;
     }
 
     template <typename Type, class node_allocator>
     typename binary_search_tree<Type, node_allocator>::downside_iterator&  binary_search_tree<Type, node_allocator>::downside_iterator::operator--() {
-        this->node = (this->node)->left;
+        if (this->node) {
+            this->node = (this->node)->left_node;
+        }
         return *this;
+    }
+
+    template <typename Type, class node_allocator>
+    const typename binary_search_tree<Type, node_allocator>::downside_iterator binary_search_tree<Type, node_allocator>::downside_iterator::operator+(unsigned int num) {
+        downside_iterator ret_iter = *this;
+        while (num--) {
+            ++(ret_iter);
+        }
+        return ret_iter;
+    }
+    
+    template <typename Type, class node_allocator>
+    const typename binary_search_tree<Type, node_allocator>::downside_iterator binary_search_tree<Type, node_allocator>::downside_iterator::operator-(unsigned int num) {
+        downside_iterator ret_iter = *this;
+        while (num--) {
+            --(ret_iter);
+        }
+        return ret_iter;
     }
 
     template <typename Type, class node_allocator>
@@ -427,6 +529,10 @@ namespace snowapril {
         return *this;
     }
 
+    template <typename Type, class node_allocator>
+    binary_search_tree<Type, node_allocator>::downside_iterator::operator bool() const {
+        return this->node != nullptr;
+    }
 }
 
 #endif
