@@ -11,8 +11,11 @@ void dump_tree(auto iter) {
 }
 
 int main(void) {
-    binary_search_tree<int> tree { 1, 3, 10, 31};
-
-    dump_tree(tree.begin());
+    vector<int> vec = {1, 3, 10, 31};
+    binary_search_tree<int> tree(vec.begin(), vec.end());
+    
+    tree.remove(10);
+    tree.remove(1);
+    //tree.remove(3);
     return 0;
 }

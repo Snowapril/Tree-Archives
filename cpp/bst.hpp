@@ -18,6 +18,7 @@
 #include <queue>
 #include <vector>
 #include "tree_exceptions.hpp"
+#include "tree_util.hpp"
 
 namespace snowapril {
 
@@ -33,7 +34,7 @@ namespace snowapril {
         bst_node_<Type> & operator=(bst_node_<Type>&&); // move assignment operator
         bst_node_(bst_node_<Type> const &); // copy constructor 
         bst_node_<Type> & operator=(bst_node_<Type> const &); // copy assignment operator
-        ~bst_node_(); //destructor
+        ~bst_node_();
         bool operator==(bst_node_ const &) const;
         bool operator!=(bst_node_ const &) const;
     public:
@@ -59,7 +60,7 @@ namespace snowapril {
         binary_search_tree() = default; // default constructor
         binary_search_tree(iterator_base const &); // constructor with one iterator
         template <typename GenericIterator>
-        binary_search_tree(std::iterator<GenericIterator, Type> const &, std::iterator<GenericIterator, Type> const &); //constructor with two standard iterators
+        binary_search_tree(GenericIterator, GenericIterator); //constructor with two standard iterators
         binary_search_tree(std::initializer_list<Type> const &); // constructor with l-value initializer_list
         binary_search_tree(std::initializer_list<Type>&&); // constructor with r-value initializer_list
         binary_search_tree(Type const *, Type const *); // constructor with two raw pointers
@@ -97,18 +98,18 @@ namespace snowapril {
                 downside_iterator() = default;
                 downside_iterator(node_type*);
             public:
-                bool                operator==(downside_iterator const &) const;
-                bool                operator!=(downside_iterator const &) const;
+                bool                    operator==(downside_iterator const &) const;
+                bool                    operator!=(downside_iterator const &) const;
                 //return downside_iterator which located at (given value) times right step from this iterator.
                 const downside_iterator operator+(unsigned int);
                 //return downside_iterator which located at (given value) times left  step from this iterator.
                 const downside_iterator operator-(unsigned int);
                 //return downside_iterator of right node.
-                downside_iterator&  operator++();
+                downside_iterator&      operator++();
                 //return downside_iterator of left  node.
-                downside_iterator&  operator--();
-                downside_iterator&  operator+=(unsigned int);
-                downside_iterator&  operator-=(unsigned int);
+                downside_iterator&      operator--();
+                downside_iterator&      operator+=(unsigned int);
+                downside_iterator&      operator-=(unsigned int);
                 explicit operator bool() const;
             };
         public:
@@ -195,14 +196,9 @@ namespace snowapril {
         return *this;
     }
 
-    #include <iostream>
-    using namespace std;
-
     template <typename Type>
     bst_node_<Type>::~bst_node_() {
-        cout << "destructor : " << value << endl;
-        if (left_node)  delete left_node;
-        if (right_node) delete right_node;
+        LOG("destructor", this);
     }
 
     template <typename Type>
@@ -226,7 +222,7 @@ namespace snowapril {
 
     template <typename Type, class node_allocator>
     template <typename GenericIterator>
-    binary_search_tree<Type, node_allocator>::binary_search_tree(std::iterator<GenericIterator, Type> const & _begin_iter, std::iterator<GenericIterator, Type> const & _end_iter) {
+    binary_search_tree<Type, node_allocator>::binary_search_tree(GenericIterator _begin_iter, GenericIterator _end_iter) {
         if (root) {
             alloc.destroy(root);
             alloc.deallocate(root, 1);
@@ -314,8 +310,7 @@ namespace snowapril {
     template <typename Type, class node_allocator>
     binary_search_tree<Type, node_allocator>::~binary_search_tree() {
         if (root) {
-            alloc.destroy(root);
-            alloc.deallocate(root, 1);
+            erase(downside_iterator(root));
         }
     }
 
@@ -361,10 +356,12 @@ namespace snowapril {
     template <typename Type, class node_allocator>
     typename binary_search_tree<Type, node_allocator>::downside_iterator binary_search_tree<Type, node_allocator>::erase(downside_iterator _iter) {
         node_type* parent_node = _iter.node->parent_node;
-        if (parent_node->left_node == _iter.node)
-            parent_node->left_node = nullptr;
-        else
-            parent_node->right_node = nullptr;
+        if (parent_node) {
+            if (parent_node->left_node == _iter.node)
+                parent_node->left_node = nullptr;
+            else
+                parent_node->right_node = nullptr;
+        }
 
         std::queue<node_type*>  q;
         q.push(_iter.node);
@@ -374,6 +371,9 @@ namespace snowapril {
             --num_node;
             if (p->left_node)  q.push(p->left_node);
             if (p->right_node) q.push(p->right_node);
+
+            LOG("del", p);
+
             alloc.destroy(p);
             alloc.deallocate(p, 1);
         }
@@ -390,13 +390,49 @@ namespace snowapril {
     template <typename Type, class node_allocator>
     typename binary_search_tree<Type, node_allocator>::downside_iterator binary_search_tree<Type, node_allocator>::remove(downside_iterator _iter, Type const &_value) {
         if (_iter.node) {
-            _internal_remove(_iter.node, _value);
+            _internal_remove(root, _value);
         }
     }
 
     template <typename Type, class node_allocator>
     void binary_search_tree<Type, node_allocator>::_internal_remove(node_type* _node, Type const &_value) {
-        //dsafdsfsdfdsf //TODO : here implementation
+        while (_node) {
+            if (_node->value > _value)
+                _node = _node->left_node;
+            else if (_node->value < _value)
+                _node = _node->right_node;
+            else
+                break;
+        }
+        if (_node) {
+            if (_node->left_node == nullptr) {
+                node_type* parent_node = _node->parent_node;
+                if (parent_node) {
+                    if (parent_node->left_node == _node)
+                        parent_node->left_node  = _node->right_node;
+                    else
+                        parent_node->right_node = _node->right_node;
+                }
+                else
+                    root = _node->right_node;
+                _node->right_node->parent_node = parent_node;
+
+                //bad memory referencing here.
+
+                alloc.destroy(_node);
+                alloc.deallocate(_node, 1);
+            }
+            node_type* swap_node = _node->left_node;
+            while (swap_node->right_node)   
+                swap_node = swap_node->right_node;
+            if (swap_node == _node->left_node) swap_node->parent_node->left_node  = nullptr;
+            else                               swap_node->parent_node->right_node = nullptr;
+            LOG("del", swap_node);
+            LOG("deleted value", _node->value);
+            _node->value = swap_node->value;
+            alloc.destroy(swap_node);
+            alloc.deallocate(swap_node, 1);
+        }
     }
 
     template <typename Type, class node_allocator>
@@ -407,6 +443,7 @@ namespace snowapril {
         else {
             root = alloc.allocate(1, 0);
             alloc.construct(root, _value);
+            LOG("root",  root);
         }
     }
     
@@ -424,18 +461,16 @@ namespace snowapril {
     template <typename Type, class node_allocator>
     void binary_search_tree<Type, node_allocator>::_internal_append(node_type* _node, Type const &_value) {
         node_type* prev_node;
+        //traverse tree until finding leaf node.
         while (_node) {
             prev_node = _node;
-            if (_node->value > _value) {
+            if (_node->value > _value)
                 _node = _node->left_node;
-            }
-            else if (_node->value == _value) {
-                return;
-            }
-            else {
+            else if (_node->value < _value)
                 _node = _node->right_node;
-            }
-        }
+            else
+                return;
+        } 
 
         _node = prev_node;
         if (_node->value > _value) {
@@ -446,6 +481,9 @@ namespace snowapril {
             _node->right_node = alloc.allocate(1, 0);
             alloc.construct(_node->right_node, _node, _value);
         }
+        LOG("add on", _node);
+        LOG("\tleft", _node->left_node);
+        LOG("\tright", _node->right_node);
     }
 
     template <typename Type, class node_allocator>
